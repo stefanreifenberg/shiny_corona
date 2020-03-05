@@ -1,8 +1,8 @@
 library(shiny)
 library(leaflet)
-library(rnaturalearth)
 library(tidyverse)
 library(rvest)
+library(raster)
 
 ui <- bootstrapPage(
 
@@ -16,7 +16,8 @@ ui <- bootstrapPage(
       tags$hr(style="border-color: black;"),
       tags$p("Quelle: Robert Koch Institut"),
       p(textOutput("dateText")),
-      tags$a("Autor: Stefan Reifenberg", href="https://twitter.com/Reyfenberg")
+      tags$p("Autor:"),
+      tags$a("Stefan Reifenberg", href="https://twitter.com/Reyfenberg")
     ),
     leafletOutput("mymap", width = "100%", height = 1000)
 )
@@ -72,8 +73,13 @@ server <- function(input, output, session) {
     bins <- c(0, 10, 20, 50, 100, 200, 500, 1000, Inf)
     pal <- colorBin("viridis", domain = corona_ger$Faelle, bins = bins)
     
-    ger_states <- ne_states(country = 'germany', returnclass = "sf")
-    corona_ger_sf <- left_join(ger_states, corona_ger, by = "name")
+    
+    DEU1 <- raster::getData("GADM", country="DEU", level=1)
+    deu_states <- st_as_sf(DEU1)
+    
+    deu_states <- deu_states %>% 
+      rename(name = "NAME_1")
+    corona_ger_sf <- left_join(deu_states, corona_ger, by = "name")
     
     labels <- sprintf(
       "<strong>%s</strong><br/>Fälle: %g",
