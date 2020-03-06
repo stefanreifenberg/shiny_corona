@@ -3,21 +3,26 @@ library(leaflet)
 library(tidyverse)
 library(rvest)
 library(raster)
+library(sf)
+library(rgeos)
 
 ui <- bootstrapPage(
 
     absolutePanel(
-      top = 10, right = 10, width = 500, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
-      tags$h2("SARS-CoV-2: Fallzahlen in Deutschland"),
-      tags$p("Hier sind ausschließlich Fälle aufgelistet, die dem RKI über den Meldeweg oder offizielle Quellen mitgeteilt wurden.
+      id = "controls", class = "panel panel-default",
+      top = 7, right = 7, width = 300, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
+      HTML('<button data-toggle="collapse" data-target="#panel">Informationen</button>'),
+      tags$div(id = 'panel',  class="collapse",
+        tags$h2("SARS-CoV-2: Fallzahlen in Deutschland"),
+        tags$p("Hier sind ausschließlich Fälle aufgelistet, die dem RKI über den Meldeweg oder offizielle Quellen mitgeteilt wurden.
          Da es sich um eine sehr dynamische Situation handelt, kann es zu Abweichungen zwischen der RKI-Tabelle und Angaben anderer Stellen,
          etwa der betroffenen Bundesländer, kommen."),
-      h3(textOutput("gesamt")),
-      tags$hr(style="border-color: black;"),
-      tags$p("Quelle: Robert Koch Institut"),
-      p(textOutput("dateText")),
-      tags$p("Autor:"),
-      tags$a("Stefan Reifenberg", href="https://twitter.com/Reyfenberg")
+        h3(textOutput("gesamt")),
+        tags$hr(style="border-color: black;"),
+        tags$p("Quelle: Robert Koch Institut"),
+        p(textOutput("dateText")),
+        tags$p("Autor:"),
+        tags$a("Stefan Reifenberg", href="https://twitter.com/Reyfenberg"))
     ),
     leafletOutput("mymap", width = "100%", height = 1000)
 )
@@ -86,10 +91,10 @@ server <- function(input, output, session) {
       corona_ger_sf$name, corona_ger_sf$Faelle
     ) %>% lapply(htmltools::HTML)
     
-    leaflet(corona_ger_sf) %>%
+    leaflet(corona_ger_sf, options = leafletOptions(zoomControl = FALSE)) %>%
       setView(11, 50, zoom = 6) %>% 
-      addProviderTiles(providers$Stamen.TonerLite,
-                       options = providerTileOptions(noWrap = TRUE)
+            addProviderTiles(providers$Stamen.TonerLite,
+                       options = providerTileOptions(noWrap = TRUE) 
       ) %>% 
       addPolygons(weight = 2,
                   fillColor = ~pal(Faelle),
