@@ -57,10 +57,13 @@ server <- function(input, output, session) {
   )
   
   output$gesamt <- renderText({
-    corona_data <- data()
+    corona_data <- data() 
     gesamt <- corona_data %>% 
-      filter(Bundesland == "Gesamt")
-    paste("Gesamtfälle:", gesamt$Fälle)
+      rename_at(2,~"Faelle") %>% 
+      rename(name = "Bundesland") %>% 
+      dplyr::select(name,Faelle) %>% 
+      filter(name == "Gesamt")
+    paste("Gesamtfälle (Todesfälle):", gesamt$Faelle)
   })
  
   output$mymap <- renderLeaflet({
@@ -69,11 +72,13 @@ server <- function(input, output, session) {
     
     corona_ger <- corona_data %>% 
       slice(1:(n()-1)) %>% 
-      rename(name = "Bundesland",
-             Faelle = "Fälle") %>%
-      mutate(name = case_when(
-        name == "Schleswig Holstein" ~ "Schleswig-Holstein",
-        TRUE ~ name)) 
+      rename_at(2,~"Faelle") %>% 
+      rename(name = "Bundesland") %>% 
+      dplyr::select(name,Faelle)
+    
+    corona_ger$Faelle <- str_replace(corona_ger$Faelle, " \\(.*\\)", "")
+    corona_ger$Faelle <- as.numeric(corona_ger$Faelle)
+    
     
     bins <- c(0, 10, 20, 50, 100, 200, 500, 1000, Inf)
     pal <- colorBin("viridis", domain = corona_ger$Faelle, bins = bins)
