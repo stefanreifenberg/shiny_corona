@@ -6,11 +6,23 @@ library(raster)
 library(sf)
 library(rgeos)
 
+# population https://en.wikipedia.org/wiki/List_of_German_states_by_population
+pop <- tibble(
+          name = c("Baden-Württemberg","Bayern","Berlin",
+                 "Brandenburg","Bremen","Hamburg","Hessen","Niedersachsen",
+                 "Mecklenburg-Vorpommern","Nordrhein-Westfalen",
+                 "Rheinland-Pfalz","Saarland","Sachsen","Sachsen-Anhalt",
+                 "Schleswig-Holstein","Thüringen"),
+          Pop = c(11069533,13076721,3644826,2511917,
+                 682986,1841179,6265809,7982448,1609675,17932651,4084844,
+                 990509,4077937,2208321,2896712,2143145)
+)
+
 ui <- bootstrapPage(
 
     absolutePanel(
       id = "controls", class = "panel panel-default",
-      top = 7, right = 7, width = 300, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
+      top = 80, left = 10, width = 300, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
       HTML('<button data-toggle="collapse" data-target="#panel">Informationen</button>'),
       tags$div(id = 'panel',  class="collapse",
         tags$h2("SARS-CoV-2: Fallzahlen in Deutschland"),
@@ -24,7 +36,7 @@ ui <- bootstrapPage(
         tags$p("Autor:"),
         tags$a("Stefan Reifenberg", href="https://twitter.com/Reyfenberg"))
     ),
-    leafletOutput("mymap", width = "100%", height = 1000)
+    leafletOutput("mymap", width = "100%", height = 900)
 )
 
 server <- function(input, output, session) {
@@ -77,12 +89,17 @@ server <- function(input, output, session) {
       dplyr::select(name,Faelle)
     
     corona_ger$Faelle <- str_replace(corona_ger$Faelle, " \\(.*\\)", "")
+    corona_ger$Faelle <- str_replace(corona_ger$Faelle, "\\.", "")
     corona_ger$Faelle <- as.numeric(corona_ger$Faelle)
     
+    # join dataframes
+    corona_ger <- inner_join(corona_ger, pop, by="name")
+    corona_ger <- corona_ger %>% 
+      mutate(per_k = (Faelle/Pop)*1000)
     
-    bins <- c(0, 10, 20, 50, 100, 200, 500, 1000, Inf)
-    pal <- colorBin("viridis", domain = corona_ger$Faelle, bins = bins)
+    pal_total <- colorNumeric( palette="viridis", domain = corona_ger$Faelle, na.color="transparent")
     
+    pal_rel <- colorNumeric( palette="viridis", domain = corona_ger$per_k, na.color="transparent")
     
     DEU1 <- raster::getData("GADM", country="DEU", level=1)
     deu_states <- st_as_sf(DEU1)
@@ -91,9 +108,14 @@ server <- function(input, output, session) {
       rename(name = "NAME_1")
     corona_ger_sf <- left_join(deu_states, corona_ger, by = "name")
     
-    labels <- sprintf(
-      "<strong>%s</strong><br/>Fälle: %g",
+    labels_total <- sprintf(
+      "<strong>%s</strong><br/>Fälle (total): %g",
       corona_ger_sf$name, corona_ger_sf$Faelle
+    ) %>% lapply(htmltools::HTML)
+    
+    labels_rel <- sprintf(
+      "<strong>%s</strong><br/>Fälle (pro 1000): %s",
+      corona_ger_sf$name, format(round(corona_ger_sf$per_k, 3), nsmall = 3)
     ) %>% lapply(htmltools::HTML)
     
     leaflet(corona_ger_sf, options = leafletOptions(zoomControl = FALSE)) %>%
@@ -101,14 +123,30 @@ server <- function(input, output, session) {
             addProviderTiles(providers$Stamen.TonerLite,
                        options = providerTileOptions(noWrap = TRUE) 
       ) %>% 
-      addPolygons(weight = 2,
-                  fillColor = ~pal(Faelle),
+      addPolygons(group = "Fälle total",
+                  weight = 2,
+                  fillColor = ~pal_total(Faelle),
                   fillOpacity = 0.7,
-                  label = labels,
+                  label = labels_total,
                   labelOptions = labelOptions(
                     style = list("font-weight" = "normal", padding = "3px 8px"),
                     textsize = "15px",
-                    direction = "auto"))
+                    direction = "auto")) %>% 
+      addPolygons(group = "Fälle pro 1000 Einwohner",
+                  weight = 2,
+                  fillColor = ~pal_rel(per_k),
+                  fillOpacity = 0.7,
+                  label = labels_rel,
+                  labelOptions = labelOptions(
+                    style = list("font-weight" = "normal", padding = "3px 8px"),
+                    textsize = "15px",
+                    direction = "auto")) %>% 
+      addLayersControl(
+        position = "topleft",
+        overlayGroups = c("Fälle total", "Fälle pro 1000 Einwohner"),
+        options = layersControlOptions(collapsed = FALSE) 
+      ) %>% 
+      hideGroup("Fälle pro 1000 Einwohner")
   })
 }
 
