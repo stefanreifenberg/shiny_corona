@@ -18,11 +18,34 @@ pop <- tibble(
                  990509,4077937,2208321,2896712,2143145)
 )
 
+# district map
+dist_data <- read_csv("https://raw.githubusercontent.com/iceweasel1/COVID-19-Germany/master/germany_with_source.csv")
+dist_data %>% 
+  drop_na() %>% 
+  str_remove_all("(district)")
+
+dist <- str_remove_all(dist_data$District, "(district)")
+dist <- gsub("[()]", "", dist)
+dist <- str_trim(dist)
+
+dist_data$District <- dist
+
+# remove unknown District in Bavaria
+dist_data <- dist_data %>% 
+  filter(District != "N/A")
+
+
+cor_district <- dist_data %>% 
+  na.omit() %>% 
+  group_by(District,Latitude,Longitude) %>% 
+  summarise(cases=n())
+
+
 ui <- bootstrapPage(
 
     absolutePanel(
       id = "controls", class = "panel panel-default",
-      top = 80, left = 10, width = 300, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
+      top = 120, left = 10, width = 300, height = "auto",fixed = TRUE, style = "z-index:500; background: #FFFFFF;padding: 8px;border: 1px solid #CCC;",
       HTML('<button data-toggle="collapse" data-target="#panel">Informationen</button>'),
       tags$div(id = 'panel',  class="collapse",
         tags$h2("SARS-CoV-2: Fallzahlen in Deutschland"),
@@ -65,41 +88,41 @@ server <- function(input, output, session) {
         html_nodes(xpath='//*[@id="main"]/div[1]/table[1]') %>%
         html_table()
       corona <- corona[[1]]
+      names(corona) <- NULL
+      corona <- corona[-c(1), ]
+      names(corona) = c("name", "Faelle", "Diff", "Faelle_rel","dead","krisen")
+      corona <- as.tibble(corona)
     }
   )
   
   output$gesamt <- renderText({
+    
     corona_data <- data() 
-    gesamt <- corona_data %>% 
-      rename_at(2,~"Faelle") %>% 
-      rename(name = "Bundesland") %>% 
-      dplyr::select(name,Faelle) %>% 
+    gesamt <- corona_data %>%
+      dplyr::select(name,Faelle,dead) %>% 
       filter(name == "Gesamt")
-    paste("Gesamtfälle (Todesfälle):", gesamt$Faelle)
+    paste("Gesamtfälle:", gesamt$Faelle, "Todesfälle:", gesamt$dead)
   })
  
   output$mymap <- renderLeaflet({
-    
+    #browser()
     corona_data <- data() 
     
     corona_ger <- corona_data %>% 
-      slice(1:(n()-1)) %>% 
-      rename_at(2,~"Faelle") %>% 
-      rename(name = "Bundesland") %>% 
+      slice(1:(n()-1)) %>%
       dplyr::select(name,Faelle)
-    
-    corona_ger$Faelle <- str_replace(corona_ger$Faelle, " \\(.*\\)", "")
     corona_ger$Faelle <- str_replace(corona_ger$Faelle, "\\.", "")
     corona_ger$Faelle <- as.numeric(corona_ger$Faelle)
+    
     
     # join dataframes
     corona_ger <- inner_join(corona_ger, pop, by="name")
     corona_ger <- corona_ger %>% 
       mutate(per_k = (Faelle/Pop)*10000)
     
-    pal_total <- colorNumeric( palette="viridis", domain = corona_ger$Faelle, na.color="transparent")
+    pal_total <- colorNumeric(palette="viridis", domain = corona_ger$Faelle, na.color="transparent")
     
-    pal_rel <- colorNumeric( palette="viridis", domain = corona_ger$per_k, na.color="transparent")
+    pal_rel <- colorNumeric(palette="viridis", domain = corona_ger$per_k, na.color="transparent")
     
     DEU1 <- raster::getData("GADM", country="DEU", level=1)
     deu_states <- st_as_sf(DEU1)
@@ -113,20 +136,38 @@ server <- function(input, output, session) {
       corona_ger_sf$name, corona_ger_sf$Faelle
     ) %>% lapply(htmltools::HTML)
     
+    labels_points <- sprintf(
+      "<strong>%s</strong><br/>Fälle: %g",
+      cor_district$District, cor_district$cases
+    ) %>% lapply(htmltools::HTML)
+    
     labels_rel <- sprintf(
       "<strong>%s</strong><br/>Fälle (pro 10.000): %s",
       corona_ger_sf$name, format(round(corona_ger_sf$per_k, 2), nsmall = 2)
     ) %>% lapply(htmltools::HTML)
     
-    leaflet(corona_ger_sf, options = leafletOptions(zoomControl = FALSE)) %>%
+    leaflet(corona_ger_sf, cor_district, options = leafletOptions(zoomControl = FALSE)) %>%
       setView(11, 50, zoom = 6) %>% 
             addProviderTiles(providers$Stamen.TonerLite,
                        options = providerTileOptions(noWrap = TRUE) 
       ) %>% 
+      # addCircleMarkers(
+      #   group = "Einzelfälle",
+      #   lng = cor_district$Longitude,
+      #   lat = cor_district$Latitude,
+      #   radius = sqrt(cor_district$cases),
+      #   color = "#A04173",
+      #   stroke = TRUE, fillOpacity = 0.9,
+      #   label = labels_points,
+      #   labelOptions = labelOptions(
+      #     style = list("font-weight" = "normal", padding = "3px 8px"),
+      #     textsize = "15px",
+      #     direction = "auto")
+      # ) %>% 
       addPolygons(group = "Fälle total",
                   weight = 2,
                   fillColor = ~pal_total(Faelle),
-                  fillOpacity = 0.7,
+                  fillOpacity = 0.6,
                   label = labels_total,
                   labelOptions = labelOptions(
                     style = list("font-weight" = "normal", padding = "3px 8px"),
@@ -135,18 +176,18 @@ server <- function(input, output, session) {
       addPolygons(group = "Fälle pro 10.000 Einwohner",
                   weight = 2,
                   fillColor = ~pal_rel(per_k),
-                  fillOpacity = 0.7,
+                  fillOpacity = 0.6,
                   label = labels_rel,
                   labelOptions = labelOptions(
                     style = list("font-weight" = "normal", padding = "3px 8px"),
                     textsize = "15px",
-                    direction = "auto")) %>% 
+                    direction = "auto")) %>%
       addLayersControl(
         position = "topleft",
-        overlayGroups = c("Fälle total", "Fälle pro 10.000 Einwohner"),
+        overlayGroups = c("Fälle total", "Fälle pro 10.000 Einwohner"), #, "Einzelfälle"),
         options = layersControlOptions(collapsed = FALSE) 
       ) %>% 
-      hideGroup("Fälle pro 10.000 Einwohner")
+      hideGroup(c("Fälle pro 10.000 Einwohner")) #, "Einzelfälle"))
   })
 }
 
