@@ -9,36 +9,14 @@ library(rgeos)
 # population https://en.wikipedia.org/wiki/List_of_German_states_by_population
 pop <- tibble(
           name = c("Baden-Württemberg","Bayern","Berlin",
-                 "Brandenburg","Bremen","Hamburg","Hessen","Niedersachsen",
-                 "Mecklenburg-Vorpommern","Nordrhein-Westfalen",
+                 "Brandenburg","Bremen","Hamburg","Hessen",
+                 "Mecklenburg-Vorpommern","Niedersachsen","Nordrhein-Westfalen",
                  "Rheinland-Pfalz","Saarland","Sachsen","Sachsen-Anhalt",
                  "Schleswig-Holstein","Thüringen"),
           Pop = c(11069533,13076721,3644826,2511917,
-                 682986,1841179,6265809,7982448,1609675,17932651,4084844,
+                 682986,1841179,6265809,1609675,7982448,17932651,4084844,
                  990509,4077937,2208321,2896712,2143145)
 )
-
-# district map
-dist_data <- read_csv("https://raw.githubusercontent.com/iceweasel1/COVID-19-Germany/master/germany_with_source.csv")
-dist_data %>% 
-  drop_na() %>% 
-  str_remove_all("(district)")
-
-dist <- str_remove_all(dist_data$District, "(district)")
-dist <- gsub("[()]", "", dist)
-dist <- str_trim(dist)
-
-dist_data$District <- dist
-
-# remove unknown District in Bavaria
-dist_data <- dist_data %>% 
-  filter(District != "N/A")
-
-
-cor_district <- dist_data %>% 
-  na.omit() %>% 
-  group_by(District,Latitude,Longitude) %>% 
-  summarise(cases=n())
 
 
 ui <- bootstrapPage(
@@ -105,7 +83,7 @@ server <- function(input, output, session) {
   })
  
   output$mymap <- renderLeaflet({
-    #browser()
+    
     corona_data <- data() 
     
     corona_ger <- corona_data %>% 
@@ -114,9 +92,7 @@ server <- function(input, output, session) {
     corona_ger$Faelle <- str_replace(corona_ger$Faelle, "\\.", "")
     corona_ger$Faelle <- as.numeric(corona_ger$Faelle)
     
-    
-    # join dataframes
-    corona_ger <- inner_join(corona_ger, pop, by="name")
+    corona_ger["Pop"] <- pop$Pop
     corona_ger <- corona_ger %>% 
       mutate(per_k = (Faelle/Pop)*10000)
     
@@ -129,16 +105,15 @@ server <- function(input, output, session) {
     
     deu_states <- deu_states %>% 
       rename(name = "NAME_1")
-    corona_ger_sf <- left_join(deu_states, corona_ger, by = "name")
+    
+    corona_ger_sf <- deu_states
+    corona_ger_sf["Faelle"] <- corona_ger$Faelle
+    corona_ger_sf["Pop"] <- corona_ger$Pop
+    corona_ger_sf["per_k"] <- corona_ger$per_k
     
     labels_total <- sprintf(
       "<strong>%s</strong><br/>Fälle (total): %g",
       corona_ger_sf$name, corona_ger_sf$Faelle
-    ) %>% lapply(htmltools::HTML)
-    
-    labels_points <- sprintf(
-      "<strong>%s</strong><br/>Fälle: %g",
-      cor_district$District, cor_district$cases
     ) %>% lapply(htmltools::HTML)
     
     labels_rel <- sprintf(
@@ -146,24 +121,14 @@ server <- function(input, output, session) {
       corona_ger_sf$name, format(round(corona_ger_sf$per_k, 2), nsmall = 2)
     ) %>% lapply(htmltools::HTML)
     
-    leaflet(corona_ger_sf, cor_district, options = leafletOptions(zoomControl = FALSE)) %>%
+    print(corona_ger$Faelle)
+    
+    leaflet(corona_ger_sf, options = leafletOptions(zoomControl = FALSE)) %>%
       setView(11, 50, zoom = 6) %>% 
             addProviderTiles(providers$Stamen.TonerLite,
                        options = providerTileOptions(noWrap = TRUE) 
       ) %>% 
-      # addCircleMarkers(
-      #   group = "Einzelfälle",
-      #   lng = cor_district$Longitude,
-      #   lat = cor_district$Latitude,
-      #   radius = sqrt(cor_district$cases),
-      #   color = "#A04173",
-      #   stroke = TRUE, fillOpacity = 0.9,
-      #   label = labels_points,
-      #   labelOptions = labelOptions(
-      #     style = list("font-weight" = "normal", padding = "3px 8px"),
-      #     textsize = "15px",
-      #     direction = "auto")
-      # ) %>% 
+      
       addPolygons(group = "Fälle total",
                   weight = 2,
                   fillColor = ~pal_total(Faelle),
@@ -184,10 +149,10 @@ server <- function(input, output, session) {
                     direction = "auto")) %>%
       addLayersControl(
         position = "topleft",
-        overlayGroups = c("Fälle total", "Fälle pro 10.000 Einwohner"), #, "Einzelfälle"),
+        overlayGroups = c("Fälle total", "Fälle pro 10.000 Einwohner"),
         options = layersControlOptions(collapsed = FALSE) 
       ) %>% 
-      hideGroup(c("Fälle pro 10.000 Einwohner")) #, "Einzelfälle"))
+      hideGroup(c("Fälle pro 10.000 Einwohner"))
   })
 }
 
