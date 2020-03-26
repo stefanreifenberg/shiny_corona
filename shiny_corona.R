@@ -63,7 +63,7 @@ server <- function(input, output, session) {
       url <- "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Fallzahlen.html"
       corona <- url %>%
         xml2::read_html() %>%
-        html_nodes(xpath='//*[@id="main"]/div[1]/table[1]') %>%
+        html_nodes(xpath='//*[@id="main"]/div[1]/div/table') %>%
         html_table()
       corona <- corona[[1]]
       names(corona) <- NULL
@@ -120,8 +120,6 @@ server <- function(input, output, session) {
       "<strong>%s</strong><br/>Fälle (pro 10.000): %s",
       corona_ger_sf$name, format(round(corona_ger_sf$per_k, 2), nsmall = 2)
     ) %>% lapply(htmltools::HTML)
-    
-    print(corona_ger$Faelle)
     
     leaflet(corona_ger_sf, options = leafletOptions(zoomControl = FALSE)) %>%
       setView(11, 50, zoom = 6) %>% 
