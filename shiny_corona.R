@@ -63,12 +63,13 @@ server <- function(input, output, session) {
       url <- "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Fallzahlen.html"
       corona <- url %>%
         xml2::read_html() %>%
-        html_nodes(xpath='//*[@id="main"]/div[1]/div/table') %>%
+        html_nodes(xpath='//*[@id="main"]/div[1]/table') %>%
         html_table()
       corona <- corona[[1]]
       names(corona) <- NULL
       corona <- corona[-c(1), ]
-      names(corona) = c("name", "Faelle", "Diff", "Faelle_rel","dead","krisen")
+      
+      names(corona) = c("name", "Faelle", "Diff", "Faelle_rel","dead")
       corona <- as.tibble(corona)
     }
   )
@@ -110,6 +111,8 @@ server <- function(input, output, session) {
     corona_ger_sf["Faelle"] <- corona_ger$Faelle
     corona_ger_sf["Pop"] <- corona_ger$Pop
     corona_ger_sf["per_k"] <- corona_ger$per_k
+    
+   
     
     labels_total <- sprintf(
       "<strong>%s</strong><br/>Fälle (total): %g",
