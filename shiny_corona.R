@@ -66,10 +66,11 @@ server <- function(input, output, session) {
         html_nodes(xpath='//*[@id="main"]/div[1]/table') %>%
         html_table()
       corona <- corona[[1]]
+      
       names(corona) <- NULL
       corona <- corona[-c(1), ]
       
-      names(corona) = c("name", "Faelle", "Diff", "Faelle_rel","dead")
+      names(corona) = c("name", "Faelle", "Diff", "7_tage","7_tage_inz","dead")
       corona <- as.tibble(corona)
     }
   )
