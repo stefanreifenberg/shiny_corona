@@ -96,7 +96,7 @@ server <- function(input, output, session) {
     
     corona_ger["Pop"] <- pop$Pop
     corona_ger <- corona_ger %>% 
-      mutate(per_k = (Faelle/Pop)*10000)
+      mutate(per_k = (Faelle/Pop)*100000)
     
     pal_total <- colorNumeric(palette="viridis", domain = corona_ger$Faelle, na.color="transparent")
     
@@ -113,15 +113,13 @@ server <- function(input, output, session) {
     corona_ger_sf["Pop"] <- corona_ger$Pop
     corona_ger_sf["per_k"] <- corona_ger$per_k
     
-   
-    
     labels_total <- sprintf(
       "<strong>%s</strong><br/>Fälle (total): %g",
       corona_ger_sf$name, corona_ger_sf$Faelle
     ) %>% lapply(htmltools::HTML)
     
     labels_rel <- sprintf(
-      "<strong>%s</strong><br/>Fälle (pro 10.000): %s",
+      "<strong>%s</strong><br/>Fälle (pro 100.000): %s",
       corona_ger_sf$name, format(round(corona_ger_sf$per_k, 2), nsmall = 2)
     ) %>% lapply(htmltools::HTML)
     
@@ -140,7 +138,7 @@ server <- function(input, output, session) {
                     style = list("font-weight" = "normal", padding = "3px 8px"),
                     textsize = "15px",
                     direction = "auto")) %>% 
-      addPolygons(group = "Fälle pro 10.000 Einwohner",
+      addPolygons(group = "Fälle pro 100.000 Einwohner",
                   weight = 2,
                   fillColor = ~pal_rel(per_k),
                   fillOpacity = 0.6,
@@ -151,10 +149,10 @@ server <- function(input, output, session) {
                     direction = "auto")) %>%
       addLayersControl(
         position = "topleft",
-        overlayGroups = c("Fälle total", "Fälle pro 10.000 Einwohner"),
+        overlayGroups = c("Fälle total", "Fälle pro 100.000 Einwohner"),
         options = layersControlOptions(collapsed = FALSE) 
       ) %>% 
-      hideGroup(c("Fälle pro 10.000 Einwohner"))
+      hideGroup(c("Fälle pro 100.000 Einwohner"))
   })
 }
 
